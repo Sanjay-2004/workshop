@@ -17,17 +17,18 @@ Available Tools:
 This function is used to get the weather details of a city.
 
 Example:
-Start
-{"type":"user", "user": "What is the sum of weather of hyderabad and delhi?"},
-{"type":"plan", "plan": "call getWeatherDetails for hyderabad"},
-{"type":"action", "function": "getWeatherDetails", "arguments": {"city": "hyderabad"}},
-{"type":"observe", "observation": "30°C"},
-{"type":"plan", "plan": "call getWeatherDetails for delhi"},
-{"type":"action", "function": "getWeatherDetails", "arguments": {"city": "delhi"}},
-{"type":"observe", "observation": "25°C"},
-{"type":"output", "output": "The sum is 55°C"}
+User: {"type":"user", "user": "What is the sum of weather of hyderabad and delhi?"}
+Assistant: {"type":"plan", "plan": "call getWeatherDetails for hyderabad"}
+User: {"type":"system","message":"proceed"}
+Assistant: {"type":"action", "function": "getWeatherDetails", "arguments": {"city": "hyderabad"}}
+User: {"type":"observe", "observation": "30°C"}
+Assistant: {"type":"plan", "plan": "call getWeatherDetails for delhi"}
+User: {"type":"system","message":"proceed"}
+Assistant: {"type":"action", "function": "getWeatherDetails", "arguments": {"city": "delhi"}}
+User: {"type":"observe", "observation": "25°C"}
+Assistant: {"type":"output", "output": "The sum is 55°C"}
 
-
+CRITICAL INSTRUCTION: You must strictly output ONLY ONE JSON object per response. Do not output multiple JSON objects separated by commas.
 `
 
 
@@ -42,11 +43,14 @@ const model = genAI.getGenerativeModel({
 
 // Tools
 
-const getWeatherDetails = (city = '') => {
-    if (city.toLowerCase() === 'hyderabad') return '38°C';
-    if (city.toLowerCase() === 'delhi') return '25°C';
-    if (city.toLowerCase() === 'mumbai') return '28°C';
-    return 'City not found';
+const getWeatherDetails = async (city = '') => {
+    try {
+        const response = await fetch(`https://wttr.in/${city}?format=3`);
+        const weather = await response.text();
+        return weather.trim();
+    } catch (error) {
+        return 'Error fetching weather';
+    }
 }
 
 const messages = [];
@@ -77,7 +81,8 @@ while (true) {
         }
 
         if (json.type === "output") {
-            console.log("Assistant: ", json.output);
+            console.log(`---------AI-------\nOutput: ${json.output}\n---------------------`);
+            console.log(`🤖: ${json.output}`);
             messages.push({
                 role: "model",
                 parts: [{ text: text }]
@@ -85,7 +90,7 @@ while (true) {
             break;
         }
         else if (json.type === "plan") {
-            console.log("Plan: ", json.plan);
+            console.log(`---------AI-------\nPlan: ${json.plan}\n---------------------`);
 
             // Push the plan as model response
             messages.push({ role: "model", parts: [{ text: text }] });
@@ -93,12 +98,12 @@ while (true) {
             messages.push({ role: "user", parts: [{ text: '{"type":"system","message":"proceed"}' }] });
         }
         else if (json.type === "action") {
-            console.log("Action: ", json.function, json.arguments);
+            console.log(`---------AI-------\nAction: ${json.function} ${JSON.stringify(json.arguments)}\n---------------------`);
 
             // Execute the local function!
             let observeResult;
             if (json.function === 'getWeatherDetails') {
-                observeResult = getWeatherDetails(json.arguments.city);
+                observeResult = await getWeatherDetails(json.arguments.city);
             } else {
                 observeResult = "Function unrecognized";
             }
@@ -107,7 +112,7 @@ while (true) {
             messages.push({ role: "model", parts: [{ text: text }] });
 
             const observationJson = JSON.stringify({ type: "observe", observation: observeResult });
-            console.log("Observation: ", observeResult);
+            console.log(`Observation: ${observeResult}`);
 
             // Push the observation back to the model as the user
             messages.push({ role: "user", parts: [{ text: observationJson }] });
